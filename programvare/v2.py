@@ -42,9 +42,6 @@ class NeuralNetwork(object):
 			for b in range(self.dimL2):
 				self.W3[b][a] = random.uniform(-1, 1)
 
-	def printWeight(self, n):
-		pprint(self.Output)
-
 	def forwProp(self):
 		for a in range(self.dimInput):
 			self.Input[a] = float(self.Input[a]) / 255
@@ -68,6 +65,18 @@ class NeuralNetwork(object):
 	def backProp(self):
 		pass
 
+	def calculateCost(self, goal):
+		self.goal = goal
+		self.cost = 0
+		for x in range(self.dimOutput):
+			self.cost += (self.goal[x] - self.Output[x])**2
+
+	def printStuff(self):
+		pprint(self.Input)
+		pprint(self.goal)
+		pprint(self.Output)
+		print(self.cost)
+
 net = NeuralNetwork()
 
 currentPic = 0
@@ -82,6 +91,7 @@ def loadPics(fromPic, toPic):
 	return pics
 
 def loadNextPic():
+	thisPicType = [0 for x in range(8)]
 	global currentPic; global pics
 	if currentPic % PICS_LOAD == 0:
 		pics = loadPics(currentPic, currentPic + PICS_LOAD)
@@ -89,16 +99,23 @@ def loadNextPic():
 	for x in range(64):
 		net.Input[x] = buff[x + 2]
 	currentPic += 1
-	return buff[0]
+	for x in range(8):
+		if x != int(buff[0]):
+			thisPicType[x] = 0
+		else:
+			thisPicType[x] = 1
+	return thisPicType
 
 def sigmoid(inp):
 	return  1 / (1 + numpy.exp(-inp))
 
 loadNextPic()
-loadNextPic()
+thisPicType = loadNextPic()
+thisPicType = loadNextPic()
 
 
 # net.mod(68, 10, 10, 1)
 net.shuffleWeights()
 net.forwProp()
-net.printWeight(1)
+net.calculateCost(thisPicType)
+net.printStuff()

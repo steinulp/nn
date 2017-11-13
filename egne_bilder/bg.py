@@ -20,9 +20,15 @@ def lagBilde(bType):
 			for x in range(0, 8):
 				testarray[y][x] = randint(224, 255)
 	if bType == 2: #kryss
+		ra = randint(-100,100)
+		rb = randint(-100,100)
 		for y in range (0, 8):
 			for x in range(0, 8):
-				testarray[y][x] = 0
+				skraaEn = (y - 4) - (x - 4) + 0.2 + (abs(y - x) * ra) / 200
+				skraaTo = (y - 4) + (x - 4) + 0.2 + (abs(y - x) * ra) / 200
+				delb = 255 - int(max(0, min(255, skraaEn * skraaEn * randint(80, 100))) + randint(0,20))
+				dela = 255 - int(max(0, min(255, skraaTo * skraaTo * randint(80, 100))) + randint(0,20))
+				testarray[y][x] = 255 - int(max(0, min(255, dela + delb)))
 	if bType == 3: #pluss
 		rh_ra = randint(-1,1)
 		rh_rb = randint(-3, 3)
@@ -33,7 +39,6 @@ def lagBilde(bType):
 		for y in range (0, 8):
 			rv_yfaktor = ((y * rv_ra) + rv_rb) / 10	
 			for x in range(8):
-
 				rh_xfaktor = (((x - rd) * rh_ra) + rh_rb) / 10
 				rh_yfaktor = ((y - (4 - rc)) + rh_xfaktor)
 				rv_xfaktor = ((x - (4 - rd)) + rv_yfaktor)
@@ -61,21 +66,24 @@ def lagBilde(bType):
 			for x in range(0, 8):
 				nx = x + 0.5
 				xfaktor = ((nx - 4) + yfaktor)
-				testarray[y][x] = int(max(0, min(255, xfaktor * xfaktor * randint(20, 255)) - randint(0,10)))
+				testarray[y][x] = int(max(0, min(255, (xfaktor ** 2) * randint(20, 255)) - randint(0,10)))
 	if bType == 6: #skraa, topp venstre
 		ra = randint(-100,100)
 		for y in range (0, 8):
 			for x in range(0, 8):
-				skr = (abs(y - x) * ra) / 200
-				vektor = (y - 4) - (x - 4) + 0.2 + skr
-				testarray[y][x] = int(max(0, min(255, vektor * vektor * randint(10, 255) - randint(0,10))))
-	if bType == 7: #skraa, topp hooyre
+				skraa = (abs(y - x) * ra) / 200
+				vektor = (y - 4) - (x - 4) + 0.2 + skraa
+				testarray[y][x] = int(max(0, min(255, (vektor ** 2) * randint(10, 255) - randint(0,10))))
+	if bType == 7: #skraaaa, topp hooyre
+		ra = randint(-100,100)
 		for y in range (0, 8):
 			for x in range(0, 8):
-				testarray[y][x] = 0;
+				skraa = (abs(y - x) * ra) / 200
+				vektor = (y - 4) + (x - 3.5) - 0.1 + skraa
+				testarray[y][x] = int(max(0, min(255, (vektor ** 2) * randint(10, 255) - randint(0,10))))
 
 def printB():
-	lagBilde(3)
+	lagBilde(randint(0, 7))
 	top = Tkinter.Tk()
 	w = Tkinter.Canvas(top, bg="white", height=CANVS, width=CANVS)
 
@@ -86,7 +94,7 @@ def printB():
 	w.pack()
 	top.mainloop()
 
-def skrivTilJSON(n):
+def skraaivTilFil(n):
 	with open('data.json', 'wb') as f:
 		for i in range(0, n):
 			lagBilde(i % 8)
@@ -101,13 +109,13 @@ def skrivTilJSON(n):
 
 
 def lagBildeFil():
-	lagBilde(4)
+	lagBilde(7)
 	copyfile("head.txt", "bilde.bmp")
 	file = open("bilde.bmp","a")
 	for y in range (0, 8):
 		for x in range(0, 8):
 			print("{0:<4}".format(testarray[y][x]), end=' ')
-			file.write(struct.pack('>B', 	testarray[y][x]))
+			file.write(struct.pack('>B', testarray[y][x]))
 		print('')
 
 	file.write(struct.pack('>h', 0))
@@ -116,15 +124,14 @@ def lagBildeFil():
 n = 0
 bool = 1
 while bool:
-	inp = raw_input("Skrive som bildefil (b), eller til JSON (j): ")
-	if inp == "j":
+	inp = raw_input("Skrive som bilde (b), eller til fil (f): ")
+	if inp == "f":
 		npics = int(raw_input("Hvor mange bilder?: "))
-		skrivTilJSON(npics)
+		skraaivTilFil(npics)
 	elif inp == "b":
 		lagBildeFil()
 	elif inp == "d": #debug, viser bildet i canvas
-		printB()
-		printB()
-		printB()
+		while 1:
+			printB()
 	else:
 		bool = 0
