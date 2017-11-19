@@ -1,6 +1,8 @@
 #-----------------NN for gjenkjenning av enkle bilder, utrent nett --> kost paa 2.68. 
 #-----------------er langt ifra optimalisert, men skal gi forstaaelse
+#-----------------------PER NAA UTEN BIAS
 
+import sys
 import math
 import simplejson as json
 import numpy
@@ -15,7 +17,10 @@ class NeuralNetwork(object):
 		self.dimL1 		= 16
 		self.dimL2 		= 16
 		self.dimOutput 	= 8
+
 		self.batchSize  = 64
+		self.stepSize   = 0.01
+
 		self.set()
 
 	def set(self):
@@ -23,18 +28,15 @@ class NeuralNetwork(object):
 		self.L1 	= [0 for x in range(self.dimL1)]
 		self.L2 	= [0 for x in range(self.dimL2)]
 		self.Output = [0 for x in range(self.dimOutput)]
+		self.bias   = [0 for x in range(3)]
 
-		self.W1	= [[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
-		self.W2	= [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
-		self.W3	= [[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
+		self.W1	= [[0 for x in range(self.dimL1)] for x in range(self.dimInput + 1)] #pluss en for bias
+		self.W2	= [[0 for x in range(self.dimL2)] for x in range(self.dimL1 + 1)]
+		self.W3	= [[0 for x in range(self.dimOutput)] for x in range(self.dimL2 + 1)]
 
 		self.L1Change 	= [0 for x in range(self.dimL1)]
 		self.L2Change 	= [0 for x in range(self.dimL2)]
 		self.OutputChange = [0 for x in range(self.dimOutput)]
-
-		self.W1Change = [[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
-		self.W2Change = [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
-		self.W3Change = [[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
 
 		self.W1TotalChange = [[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
 		self.W2TotalChange = [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
@@ -57,6 +59,8 @@ class NeuralNetwork(object):
 		for a in range(self.dimOutput): 
 			for b in range(self.dimL2):
 				self.W3[b][a] = random.uniform(-1, 1)
+		for a in range(3): 
+			self.bias[a] = random.uniform(-1, 1)
 
 	def forwProp(self):
 		for a in range(self.dimInput):
@@ -66,19 +70,22 @@ class NeuralNetwork(object):
 		for a in range(self.dimL1):
 			for b in range(self.dimInput):
 				tmp += self.W1[b][a] * self.Input[b]
-			self.L1[a] = sigmoid(tmp)
+			self.L1[a] = sigmoid(tmp + self.bias[0])
 		tmp = 0
 		for a in range(self.dimL2):
 			for b in range(self.dimL1):
 				tmp += self.W2[b][a] * self.L1[b]
-			self.L2[a] = sigmoid(tmp)
+			self.L2[a] = sigmoid(tmp + self.bias[1])
 		tmp = 0
 		for a in range(self.dimOutput):
 			for b in range(self.dimL2):
 				tmp += self.W3[b][a] * self.L2[b]
-			self.Output[a] = sigmoid(tmp)
+			self.Output[a] = sigmoid(tmp + self.bias[2])
 
 	def backProp(self): 
+		self.L1Change 	= [0 for x in range(self.dimL1)]
+		self.L2Change 	= [0 for x in range(self.dimL2)]
+
 		for a in range(self.dimL2):
 			for b in range(self.dimOutput):
 				self.L2Change[a] += self.OutputChange[b] * self.W3[a][b] #onsket endring i "celler"
@@ -89,8 +96,51 @@ class NeuralNetwork(object):
 
 		for a in range(self.dimL2):
 			for b in range(self.dimOutput):
-				self.W3Change[0][0] = self.OutputChange[0] * self.L2Change[0] * abs(self.W3[0][0])
+				self.W3TotalChange[a][b] += self.OutputChange[b] * self.L2[a]    # * abs(self.W3[a][b])
 
+		for a in range(self.dimL1):
+			for b in range(self.dimL2):
+				self.W2TotalChange[a][b] += self.L2Change[b] * self.L1[a]    # * abs(self.W2[a][b])
+
+		for a in range(self.dimInput):
+			for b in range(self.dimL1):
+				self.W1TotalChange[a][b] += self.L1Change[b] * self.Input[a]    # * abs(self.W1[a][b])
+
+	def train(self, nBatches):
+		print("Trener nett...")
+		for x in range(nBatches):
+			sys.stdout.write('\r')
+			sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / nBatches), int((100 * (1 + x)) / nBatches)))
+			net.trainBatch()
+
+	def trainBatch(self):
+		self.W1TotalChange = [[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
+		self.W2TotalChange = [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
+		self.W3TotalChange = [[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
+
+		for x in range(self.batchSize):
+			self.thisPicType = loadNextPic()
+			self.forwProp()
+			self.calculateCost(self.thisPicType)
+			self.backProp()
+
+		for a in range(self.dimL2):
+			for b in range(self.dimOutput):
+				self.W3TotalChange[a][b] /= self.batchSize
+				self.W3[a][b] += (1 - abs(self.W3[a][b])) * self.W3TotalChange[a][b] * self.stepSize
+
+		for a in range(self.dimL1):
+			for b in range(self.dimL2):
+				self.W2TotalChange[a][b] /= self.batchSize
+				self.W2[a][b] += (1 - abs(self.W2[a][b])) * self.W2TotalChange[a][b] * self.stepSize
+
+		for a in range(self.dimInput):
+			for b in range(self.dimL1):
+				self.W1TotalChange[a][b] /= self.batchSize
+				self.W1[a][b] += (1 - abs(self.W1[a][b])) * self.W1TotalChange[a][b] * self.stepSize
+
+		x = raw_input("")
+		pprint(self.W3TotalChange)
 
 	def calculateCost(self, goal):
 		self.goal = goal
@@ -101,20 +151,30 @@ class NeuralNetwork(object):
 
 	def netCost(self, setSize): 
 		self.setCost = 0
+		print("\n\nTester nett...")
 		for x in range(setSize): 
-			thisPicType = loadNextPic()
+			self.thisPicType = loadNextPic()
 			self.forwProp()
-			self.calculateCost(thisPicType)
+			self.calculateCost(self.thisPicType)
 			self.setCost += self.cost
-		self.setCost /= setSize	
+
+			sys.stdout.write('\r')
+			sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / setSize), int((100 * (1 + x)) / setSize)))
+			sys.stdout.flush()
+		self.setCost /= setSize
+		print("\n\n")
+		print(self.setCost)	
+		pprint(self.Output)
+		pprint(self.thisPicType)
+
 
 
 	def printStuff(self):
 		#pprint(self.Input)
 		#pprint(self.goal)
 		#pprint(self.Output)
-		pprint(self.L1Change)
-		pprint(self.L2Change)
+		pprint(self.W1TotalChange)
+		pprint(self.W2TotalChange)
 
 net = NeuralNetwork()
 
@@ -123,10 +183,10 @@ def loadPics(fromPic, toPic):
 	pics = [0 for x in range(1 + toPic - fromPic)]
 	with open('..\egne_bilder\data.json') as f:
 		for i, line in enumerate(f):
-		    if (i >= fromPic) and (i <= toPic):
-		        pics[i - fromPic] = line
-		    elif i > toPic:
-		        break
+			if (i >= fromPic) and (i <= toPic):
+				pics[i - fromPic] = line
+			elif i > toPic:
+				break
 	return pics
 
 def loadNextPic():
@@ -148,14 +208,11 @@ def loadNextPic():
 def sigmoid(inp):
 	return  1 / (1 + numpy.exp(-inp))
 
-def sigmoidDer(inp):
-	return numpy.exp(-inp)/((1 + numpy.exp(-inp))**2)
+def inverseSigmoid(inp):
+	return numpy.log10(inp / (1 - inp))
 
 
 
 net.shuffleWeights()
-thisPicType = loadNextPic()
-net.forwProp()
-net.calculateCost(thisPicType)
-net.backProp()
-net.printStuff()
+net.train(200)
+net.netCost(5)
