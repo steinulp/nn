@@ -3,8 +3,8 @@ from random import randint
 from shutil import copyfile
 import math
 import struct
-import simplejson as json #til jsonfilen
 import Tkinter, tkMessageBox #til canvas
+import sys
 
 
 CANVS = 320
@@ -97,6 +97,11 @@ def printB():
 def skraaivTilFil(n):
 	with open('data.json', 'wb') as f:
 		for i in range(0, n):
+			if(n > 10000 and i % 100 == 0):
+				sys.stdout.write('\r')
+				sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (1+i)) / n), int((100 * (1 + i)) / n)))
+				sys.stdout.flush()
+			print("\n\n")
 			lagBilde(i % 8)
 			v = i % 8
 
