@@ -3,22 +3,26 @@
 
 import sys
 import math
-import simplejson as json
 import numpy
 from pprint import pprint
 import random
+import thread
+import os
 
 PICS_LOAD = 100
 
 class NeuralNetwork(object):
 	def __init__(self):
 		self.dimInput 	= 64 #fast for disse bildene
-		self.dimL1 		= 32 #variabel
-		self.dimL2 		= 32 #variabel
+		self.dimL1 		= 16 #variabel
+		self.dimL2 		= 16 #variabel
 		self.dimOutput 	= 8  #fast for disse bildene
 
 		self.batchSize  = 16
 		self.stepSize   = 0.1
+
+		self.draw = 0
+		self.pBar = 1
 
 		#L1 32, L2, 32, BS 16, SS 0.1,  i 30k 	=> 91.92-75.42-88.32
 		#L1 32, L2, 30, BS 16, SS 0.1,  i 30k 	=> 30.36-87.30-80.04
@@ -65,12 +69,12 @@ class NeuralNetwork(object):
 		self.biasW2TotalChange	= 	[0 for x in range(self.dimL2)]
 		self.biasW3TotalChange 	= 	[0 for x in range(self.dimOutput)]
 
-
-	def mod(self, dimInput, dimL1, dimL2, dimOutput):
-		self.dimInput 	= dimInput
+	def mod(self, dimL1, dimL2, batchSize, stepSize, pBar):
 		self.dimL1 		= dimL1
 		self.dimL2 		= dimL2
-		self.dimOutput 	= dimOutput
+		self.batchSize 	= batchSize
+		self.stepSize 	= stepSize
+		self.pBar 		= pBar
 		self.set()
 
 	def shuffleWeights(self):
@@ -138,8 +142,6 @@ class NeuralNetwork(object):
 				sys.exit("FOR STORT INPUT TIL SIGMOID")
 
 
-
-
 	def backProp(self): 
 		self.L1Change 	= [0 for x in range(self.dimL1)]
 		self.L2Change 	= [0 for x in range(self.dimL2)]
@@ -184,14 +186,18 @@ class NeuralNetwork(object):
 
 	def train(self, nBatches):
 		self.evaluateWeights()
-		print("Trener nett...")
+		if(self.pBar): print("Trener nett...")
 		nBatches = int(nBatches / self.batchSize)
 		for x in range(nBatches):
 			#-----------------fancy lastebar------------------
-			sys.stdout.write('\r')
-			sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / nBatches), int((100 * (1 + x)) / nBatches)))
+			if(self.pBar):
+				sys.stdout.write('\r')
+				sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / nBatches), int((100 * (1 + x)) / nBatches)))
 			
 			net.trainBatch()
+
+			if(self.draw):
+				batchCost = self.testPic()
 
 	def trainBatch(self):
 		#-----------------gaar igjennom en batch----------------
@@ -247,6 +253,17 @@ class NeuralNetwork(object):
 		self.W2TotalChange = [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
 		self.W3TotalChange = [[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
 
+	def evaluateWeights(self): #tester om alle vektene er gyldige
+		for a in range(self.dimL1): 
+			for b in range(self.dimInput):
+				if(abs(self.W1[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+		for a in range(self.dimL2): 
+			for b in range(self.dimL1):
+				if(abs(self.W2[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+		for a in range(self.dimOutput): 
+			for b in range(self.dimL2):
+				if(abs(self.W3[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+
 	def calculateCost(self, goal):
 		self.goal = goal
 		self.cost = 0
@@ -264,31 +281,14 @@ class NeuralNetwork(object):
 				goalIndex = x
 		if(goalIndex == maxIndex):
 			self.costHit = 1
-		# print("\n\n")
-		# print(self.goal)
-		# print(goalIndex)
-		# print("")
-		# pprint(self.Output)
-		# print(maxIndex)
-		# print("\n")
-		# print(self.costHit)
-		# x = raw_input("")
 
-	def evaluateWeights(self): #tester om alle vektene er gyldige
-		for a in range(self.dimL1): 
-			for b in range(self.dimInput):
-				if(abs(self.W1[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
-		for a in range(self.dimL2): 
-			for b in range(self.dimL1):
-				if(abs(self.W2[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
-		for a in range(self.dimOutput): 
-			for b in range(self.dimL2):
-				if(abs(self.W3[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+	def testPic(self):
+		pass
 
 	def netCost(self, setSize): 
 		self.setCost = 0
 		self.realSetCost = 0
-		print("\n\nTester nett...")
+		if(self.pBar): print("\n\nTester nett...")
 		for x in range(setSize): 
 			self.thisPicType = loadNextPic()
 			self.forwProp()
@@ -297,27 +297,25 @@ class NeuralNetwork(object):
 			self.realSetCost += self.costHit
 
 			#-----------------fancy lastebar------------------
-			sys.stdout.write('\r')
-			sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / setSize), int((100 * (1 + x)) / setSize)))
-			sys.stdout.flush()
+			if(self.pBar):
+				sys.stdout.write('\r')
+				sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / setSize), int((100 * (1 + x)) / setSize)))
+				sys.stdout.flush()
 		self.setCost /= setSize
 		self.realSetCost = 100 * (float(self.realSetCost) / setSize)
-		print("\n\n")
-		print("Kost: " + str(self.setCost))
-		print("Noyaktighet: " + str(self.realSetCost) + "%")
-		print("\n")			
-		pprint(self.Output)
-		pprint(self.thisPicType)
-
-	def printStuff(self):
-		#pprint(self.Input)
-		#pprint(self.goal)
-		#pprint(self.Output)
-		pprint(self.W1TotalChange)
-		pprint(self.W2TotalChange)
+		if(self.pBar):
+			print("\n\n")
+			print("Kost: " + str(self.setCost))
+			print("Noyaktighet: " + str(self.realSetCost) + "%")
+			print("\n")			
+		# pprint(self.Output)
+		# pprint(self.thisPicType)
+		return self.realSetCost
 
 	def drawGraph(self):
-		pass
+		top = Tkinter.Tk()
+		w = Tkinter.Canvas(top, bg="white", height=500, width=1000)
+		self.draw = 1
 
 net = NeuralNetwork()
 
@@ -357,7 +355,41 @@ def derSigmoid(inp):
 def inverseSigmoid(inp):
 	return numpy.log10(inp / (1 - inp))
 
+def testBest(n, m):
+	avCost = 0
+	tSize = 12
+	global currentPic
+	for x in range(tSize):
+		printx = float((n * tSize) + x)
+		printM = float(tSize * m)
+		os.system('cls')
+		sys.stdout.write("Jobber...\n\n")
+		sys.stdout.write("[%-19s]"% ('=' * int((20 * printx) / printM)))
+		sys.stdout.write(str((100 * printx) / printM) + "%")
+		sys.stdout.write("\n\n    Totalt: " + str(n + 1) + " av " + str(m))
+		sys.stdout.write("\n    Del: " + str(x + 1) + " av " + str(tSize) + "\n\n")
+		sys.stdout.flush()
+		currentPic = 0
+		net.shuffleWeights()
+		net.train(40000)
+		avCost += net.netCost(2000)
+	avCost /= tSize
+	with open('dump.data', 'a') as f:
+		f.write("L1:" + str(net.dimL1))
+		f.write(" L2:" + str(net.dimL2))
+		f.write(" BS:" + str(net.batchSize))
+		f.write(" SS:" + str(net.stepSize))
+		f.write(" R:" + str(avCost) + "\n")
+		f.close() 
 
-net.shuffleWeights()
-net.train(30000)
-net.netCost(5000)
+def testALOT():
+	L1Settings 		= [  64,  48,    64,  48]
+	L2Settings		= [  64,  48,    64,  48]
+	batchSettings 	= [  16,  16,    16,  16]
+	stepSettings 	= [0.08, 0.1,  0.08, 0.1]
+
+	for x in range(0,len(L1Settings)):
+		net.mod(L1Settings[x], L2Settings[x], batchSettings[x], stepSettings[x], 1)
+		testBest(x, len(L1Settings))
+
+testALOT()
