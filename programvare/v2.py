@@ -1,13 +1,17 @@
 #-----------------NN for gjenkjenning av enkle bilder. utrent nett (tilfeldige vekter) --> kost paa 2.68, noyaktighet paa 12.50
 #-----------------er langt ifra optimalisert, men skal gi forstaaelse
 
-import sys
+#matte shiet
 import math
 import numpy
-from pprint import pprint
 import random
-import thread
+
+#visualisering
+import sys
+from pprint import pprint
 import os
+import Tkinter, tkMessageBox #til canvas
+
 
 PICS_LOAD = 100
 
@@ -22,21 +26,7 @@ class NeuralNetwork(object):
 		self.stepSize   = 0.1
 
 		self.draw = 0
-		self.pBar = 1
-
-		#L1 32, L2, 32, BS 16, SS 0.1,  i 30k 	=> 91.92-75.42-88.32
-		#L1 32, L2, 30, BS 16, SS 0.1,  i 30k 	=> 30.36-87.30-80.04
-		#L1 32, L2, 16, BS 16, SS 0.1,  i 30k 	=> 82.37-76.47
-		#L1 32, L2, 16, BS 16, SS 0.04, i 30k 	=> 78.55-42.42
-		#L1 32, L2,  8, BS 16, SS 0.1,  i 30k 	=> 48
-		#L1 32, L2, 16, BS 16, SS 0.2,  i 30k 	=> 12.50-25.00
-		#L1 31, L2, 10, BS 16, SS 0.1,  i 30k 	=> 82.37
-		#L1 32, L2, 16, BS 12, SS 0.1,  i 30k 	=> 25.02
-		#L1 22, L2, 22, BS 12, SS 0.1,  i 30k 	=> 31.05
-		#L1 10, L2, 10, BS 10, SS 0.04, i 30k 	=> 25.00-12.50
-		#L1 10, L2, 10, BS 16, SS 0.04, i 30k 	=> 12.50-25.00
-
-		self.e = 0 #debugging i vekter, kan fjernes etterhvert
+		self.echoStat = 1
 
 		self.set()
 
@@ -49,12 +39,12 @@ class NeuralNetwork(object):
 		self.bias   			= 	[0 for x in range(3)]
 
 		#-----------------vekter-------------------
-		self.W1					= 	[[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
-		self.W2					= 	[[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
-		self.W3					= 	[[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
-		self.biasW1 			= 	[0 for x in range(self.dimL1)]
-		self.biasW2 			= 	[0 for x in range(self.dimL2)]
-		self.biasW3 			= 	[0 for x in range(self.dimOutput)]
+		self.W1					= 	[[1 for x in range(self.dimL1)] for x in range(self.dimInput)]
+		self.W2					= 	[[1 for x in range(self.dimL2)] for x in range(self.dimL1)]
+		self.W3					= 	[[1 for x in range(self.dimOutput)] for x in range(self.dimL2)]
+		self.biasW1 			= 	[1 for x in range(self.dimL1)]
+		self.biasW2 			= 	[1 for x in range(self.dimL2)]
+		self.biasW3 			= 	[1 for x in range(self.dimOutput)]
 
 		#-----------------onkset endring i "lagene"-----------------
 		self.L1Change 			= 	[0 for x in range(self.dimL1)]
@@ -69,12 +59,13 @@ class NeuralNetwork(object):
 		self.biasW2TotalChange	= 	[0 for x in range(self.dimL2)]
 		self.biasW3TotalChange 	= 	[0 for x in range(self.dimOutput)]
 
-	def mod(self, dimL1, dimL2, batchSize, stepSize, pBar):
+	def mod(self, dimL1, dimL2, batchSize, stepSize, echoStat, draw):
 		self.dimL1 		= dimL1
 		self.dimL2 		= dimL2
 		self.batchSize 	= batchSize
 		self.stepSize 	= stepSize
-		self.pBar 		= pBar
+		self.echoStat 	= echoStat
+		self.draw 		= draw
 		self.set()
 
 	def shuffleWeights(self):
@@ -101,7 +92,6 @@ class NeuralNetwork(object):
 
 
 		#-----------------gange inn vekter-------------------
-		self.e += 1
 		for a in range(self.dimL1):
 			tmp = 0
 			for b in range(self.dimInput):
@@ -112,7 +102,6 @@ class NeuralNetwork(object):
 				print("Lag 1")
 				print("Bias: " + str(self.biasW1[a]))
 				print("Tmp: " + str(tmp))
-				print("Nummer: " + str(self.e))
 				sys.exit("FOR STORT INPUT TIL SIGMOID")
 
 
@@ -184,36 +173,31 @@ class NeuralNetwork(object):
 		for a in range(self.dimOutput):
 			self.biasW3TotalChange[a] += self.OutputChange[a] * abs(self.biasW3[a] * 0.5)
 
-	def train(self, nBatches):
-		self.evaluateWeights()
-		if(self.pBar): print("Trener nett...")
-		nBatches = int(nBatches / self.batchSize)
+	def train(self, nPics):
+		if(self.echoStat): print("Trener nett...")
+		if(self.draw): 
+			self.nPics = nPics #gjor nPics tilgengelig hvis det trengs
+			self.initGraph()
+
+		nBatches = int(nPics / self.batchSize)
 		for x in range(nBatches):
 			#-----------------fancy lastebar------------------
-			if(self.pBar):
+			if(self.echoStat):
 				sys.stdout.write('\r')
 				sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / nBatches), int((100 * (1 + x)) / nBatches)))
 			
-			net.trainBatch()
+			net.trainBatch(x, nBatches)
+		if(self.draw): self.endGraph()
 
-			if(self.draw):
-				batchCost = self.testPic()
-
-	def trainBatch(self):
+	def trainBatch(self, batchNumber, nBatches):
+		batchCost = 0
 		#-----------------gaar igjennom en batch----------------
 		for x in range(self.batchSize):
 			self.thisPicType = loadNextPic()
 			self.forwProp()
 			self.calculateCost(self.thisPicType)
-			self.backProp()
-			# print("");print("");print("")
-			# pprint(self.thisPicType)
-			# print("")
-			# pprint(self.OutputChange)
-			# print("")
-			# pprint(self.Output)
-			# w = raw_input("")
 
+			self.backProp()
 
 		#-----------------snitt av endringen til vekter og paavirke vektene--------------------------
 		for a in range(self.dimL2):
@@ -244,30 +228,28 @@ class NeuralNetwork(object):
 			self.biasW3TotalChange[a] /= self.batchSize
 			self.biasW3[a] += (1 - abs(self.biasW3[a])) * self.biasW3TotalChange[a] * self.stepSize
 		
-		# x = raw_input("")
-		# pprint(self.W3TotalChange)
-
 
 		#-----------------resetter vektendringene-----------------
 		self.W1TotalChange = [[0 for x in range(self.dimL1)] for x in range(self.dimInput)]
 		self.W2TotalChange = [[0 for x in range(self.dimL2)] for x in range(self.dimL1)]
 		self.W3TotalChange = [[0 for x in range(self.dimOutput)] for x in range(self.dimL2)]
 
+
 	def evaluateWeights(self): #tester om alle vektene er gyldige
 		for a in range(self.dimL1): 
 			for b in range(self.dimInput):
-				if(abs(self.W1[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+				if(abs(self.W1[b][a]) > 100): sys.exit("ERROR: ugyldige vekter")
 		for a in range(self.dimL2): 
 			for b in range(self.dimL1):
-				if(abs(self.W2[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+				if(abs(self.W2[b][a]) > 100): sys.exit("ERROR: ugyldige vekter")
 		for a in range(self.dimOutput): 
 			for b in range(self.dimL2):
-				if(abs(self.W3[b][a]) > 1): sys.exit("ERROR: ugyldige vekter")
+				if(abs(self.W3[b][a]) > 100): sys.exit("ERROR: ugyldige vekter")
 
 	def calculateCost(self, goal):
 		self.goal = goal
 		self.cost = 0
-		self.costHit = 0
+		costHit = 0
 		maxO = 0
 		maxIndex = 0
 		goalIndex = 0
@@ -280,42 +262,130 @@ class NeuralNetwork(object):
 			if(self.goal[x] == 1):
 				goalIndex = x
 		if(goalIndex == maxIndex):
-			self.costHit = 1
+			costHit = 1
 
-	def testPic(self):
-		pass
+		if(self.draw):
+			self.drawGraph(costHit, self.cost)
+		return costHit
+
 
 	def netCost(self, setSize): 
+		self.draw = 0 #skal ikke tegne graf ved testing
 		self.setCost = 0
 		self.realSetCost = 0
-		if(self.pBar): print("\n\nTester nett...")
-		for x in range(setSize): 
+		if(self.echoStat): print("\n\nTester nett...")
+		for x in range(setSize):
 			self.thisPicType = loadNextPic()
 			self.forwProp()
-			self.calculateCost(self.thisPicType)
+			self.realSetCost += self.calculateCost(self.thisPicType)
 			self.setCost += self.cost
-			self.realSetCost += self.costHit
 
 			#-----------------fancy lastebar------------------
-			if(self.pBar):
+			if(self.echoStat):
 				sys.stdout.write('\r')
 				sys.stdout.write("[%-19s] %d%%" % ('=' * int((20 * (0.5+x)) / setSize), int((100 * (1 + x)) / setSize)))
 				sys.stdout.flush()
 		self.setCost /= setSize
 		self.realSetCost = 100 * (float(self.realSetCost) / setSize)
-		if(self.pBar):
+		if(self.echoStat):
 			print("\n\n")
 			print("Kost: " + str(self.setCost))
 			print("Noyaktighet: " + str(self.realSetCost) + "%")
 			print("\n")			
-		# pprint(self.Output)
-		# pprint(self.thisPicType)
 		return self.realSetCost
 
-	def drawGraph(self):
-		top = Tkinter.Tk()
-		w = Tkinter.Canvas(top, bg="white", height=500, width=1000)
-		self.draw = 1
+	def initGraph(self):
+		self.cnvH = 720
+		self.cnvW = 1350
+		# if(self.cnvW * 8 > self.nPics):
+		# 	self.drawBatchSize = 8
+		# else:
+		self.drawBatchSize = int(self.nPics / self.cnvW)
+		self.thisPicNumberDraw = 0
+		self.graphBatchHit = 0
+		self.graphBatchCost = 0
+
+		self.elForHit = [0 for x in range(self.cnvW)]
+		self.elForCost = [0 for x in range(self.cnvW)]
+		self.yCoorsHit = [0 for x in range(self.cnvW)]
+		self.yCoorsCost = [(self.cnvH * 0.875) for x in range(self.cnvW)]
+		self.xCoor = 0				
+
+		self.master = Tkinter.Tk()
+		self.canvas = Tkinter.Canvas(self.master, bg="white", height=self.cnvH, width=self.cnvW)
+		
+		for x in range(self.cnvW):
+			self.elForHit[x] = self.canvas.create_oval(x, self.cnvH + 100, x + 3, self.cnvH + 100 + 3, width = 0, fill="red")
+		for x in range(self.cnvW):
+			self.elForCost[x] = self.canvas.create_oval(x, self.cnvH + 100, x + 3, self.cnvH + 100 + 3, width = 0, fill="blue")
+
+		# if(self.cnvW * 8 > self.nPics): 
+		# 	nPicsInGraph = float(self.cnvW * 8)
+		# else:
+		nPicsInGraph = self.nPics
+
+		axisDim = 10
+		if(min(self.cnvW, self.cnvH) < 200):
+			axisDim = 5
+		yAxis = int(nPicsInGraph)
+		yAxis2 = 0
+		base = 10
+		yAxisExtra = 1
+		while(yAxis > axisDim):
+			yAxis /= base
+			yAxis2 += 1
+		while(yAxis < axisDim):
+			yAxis *= 2
+			yAxisExtra *= 2
+
+
+
+		for x in range(axisDim):
+			self.canvas.create_line(0, (x * self.cnvH) / axisDim, self.cnvW, (x * self.cnvH) / axisDim, width = 0, fill="gray")
+			self.canvas.create_text(self.cnvW - 23, (x * self.cnvH) / axisDim, text=str((100 * (axisDim - x)) / axisDim) + "%", anchor="nw", fill="red")
+			self.canvas.create_text(self.cnvW - 15, (x * self.cnvH) / axisDim + 12, text=str((2 * float(axisDim - x) / axisDim)), anchor="nw", fill="blue")  
+		for x in range(yAxis):
+			self.canvas.create_line((x * self.cnvW) / yAxis, 0, (x * self.cnvW) / yAxis, self.cnvH, width = 0, fill="gray")
+			self.canvas.create_text((x * self.cnvW) / yAxis, self.cnvH - 10, text=str((x * (base**yAxis2) / yAxisExtra)), anchor="nw")
+
+
+		self.canvas.pack()
+		self.canvas.update()
+
+	def endGraph(self):
+		self.master.mainloop()
+
+	def drawGraph(self, hit, cost):
+		self.graphBatchHit += hit
+		self.graphBatchCost += cost
+		self.thisPicNumberDraw += 1
+		if(self.thisPicNumberDraw % self.drawBatchSize == 0):
+			lastTenHit = 0
+			lastTenCost = 0
+			self.yCoorsHit[min(self.xCoor, self.cnvW - 1)] = self.cnvH * float(self.graphBatchHit) / float(self.drawBatchSize)
+			self.yCoorsCost[min(self.xCoor, self.cnvW - 1)] = self.cnvH * float(self.graphBatchCost) / float(self.drawBatchSize * 2)
+
+			for x in range(24):
+				lastTenHit += self.yCoorsHit[min(self.cnvW - 1, abs(self.xCoor - x))]
+				lastTenCost += self.yCoorsCost[min(self.cnvW - 1, abs(self.xCoor - x))]
+		
+			lastTenHit = int(self.cnvH - (lastTenHit / 24))
+			lastTenCost = int(self.cnvH - (lastTenCost / 24))
+
+
+			x1, y1, x2, y2 = self.canvas.bbox(self.elForHit[min(self.cnvW - 1, self.xCoor)])
+			self.canvas.move(self.elForHit[min(self.cnvW - 1, self.xCoor)], 0, lastTenHit - y1)
+
+			x1, y1, x2, y2 = self.canvas.bbox(self.elForCost[min(self.cnvW - 1, self.xCoor)])
+			self.canvas.move(self.elForCost[min(self.cnvW - 1, self.xCoor)], 0, lastTenCost - y1)
+
+
+			
+			self.canvas.update()
+			self.xCoor += 1
+			self.graphBatchHit = 0
+			self.graphBatchCost = 0
+
 
 net = NeuralNetwork()
 
@@ -386,10 +456,16 @@ def testALOT():
 	L1Settings 		= [  64,  48,    64,  48]
 	L2Settings		= [  64,  48,    64,  48]
 	batchSettings 	= [  16,  16,    16,  16]
-	stepSettings 	= [0.08, 0.1,  0.08, 0.1]
+	stepSettings 	= [ 0.1, 0.1,  0.08, 0.1]
 
 	for x in range(0,len(L1Settings)):
-		net.mod(L1Settings[x], L2Settings[x], batchSettings[x], stepSettings[x], 1)
+		net.mod(L1Settings[x], L2Settings[x], batchSettings[x], stepSettings[x], 1, 0)
 		testBest(x, len(L1Settings))
 
-testALOT()
+net.mod(42, 42, 16, 0.1, 1, 1)
+net.shuffleWeights()
+net.train(47000)
+print("")
+net.netCost(2000)
+pprint(net.Output)
+pprint(net.goal)
