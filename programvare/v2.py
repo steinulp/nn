@@ -157,6 +157,7 @@ class NeuralNetwork(object):
 
 	#trener nettet over "nPics" antall bilder
 	def train(self, nPics):
+		global currentPic 
 		if(self.echoStat): print("Trener nett...")
 		if(self.draw): #hvis ting skal tegnes
 			self.nPics = nPics #gjor nPics tilgengelig hvis det trengs
@@ -164,6 +165,7 @@ class NeuralNetwork(object):
 
 		nBatches = int(nPics / self.batchSize)
 		for x in range(nBatches):
+			currentPic = 0
 			#-----------------fancy lastebar------------------
 			if(self.echoStat):
 				sys.stdout.write('\r')
@@ -406,7 +408,7 @@ class NeuralNetwork(object):
 			return 0
 		return  1 / (1 + numpy.exp(-inp))
 
-PICS_LOAD = 100
+PICS_LOAD = 64
 currentPic = 0
 def loadPics(fromPic, toPic):
 	pics = [0 for x in range(1 + toPic - fromPic)]
@@ -479,9 +481,9 @@ net = NeuralNetwork()
 	
 #net.modCanvas(1911, 1052, 10) #STORSKJERM
 net.modCanvas(1000, 500, 8) #PC-SKJERM
-net.mod(42, 42, 16, 0.1, 1, 1)
+net.mod(42, 42, 64, 0.1, 1, 1)
 net.shuffleWeights()
-net.train(3500)
+net.train(20000)
 net.netCost(1000)
 
 pprint(net.Output)
